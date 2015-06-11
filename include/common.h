@@ -1,4 +1,6 @@
 #pragma once
+#include <stdint.h>
+#include <stddef.h>
 
 #define CONCAT2(_a, _b)                  _a##_b
 #define CONCAT3(_a, _b, _c)              _a##_b##_c
@@ -16,4 +18,8 @@
 #define XSTRING(_s) STRING(_s)
 
 #define ARRAY_SIZE(_a) (sizeof(_a) / sizeof((_a)[0]))
+
+#define container_of(_ptr, _type, _member) ({ \
+    const typeof(((_type *) 0)->_member) *__mptr = (_ptr); \
+    (_type *) ((uint8_t *)__mptr - offsetof(_type, _member)); })
 

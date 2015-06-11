@@ -96,6 +96,7 @@ struct team {
     struct dev *dev; // Support only one device per team (at leat for now)
     struct rank_range *ranges;
     size_t ranges_size;
+    void *data; // Device data
 };
 
 struct prog {

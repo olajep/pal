@@ -75,6 +75,7 @@ AC_CONFIG_FILES([Makefile
                  src/base/Makefile
                  src/base/devices/Makefile
                  src/base/devices/epiphany/Makefile
+                 src/base/devices/pthreads/Makefile
                  src/dsp/Makefile
                  src/fft/Makefile
                  src/image/Makefile
@@ -155,6 +156,16 @@ AS_IF([test "x$enable_device_epiphany" = "xyes"],
        #AC_SUBST([ENABLE_DEV_EPIPHANY], [yes])
        AC_DEFINE([ENABLE_DEV_EPIPHANY], [1], [Epiphany device support])
        ])
+
+# PTHREADS device support
+AC_ARG_ENABLE([device_pthreads],
+              AS_HELP_STRING([--enable-device-pthreads],
+                             [Enable PTHREADS device]))
+AM_CONDITIONAL([ENABLE_DEV_PTHREADS],
+               [test "x$enable_device_pthreads" = "xyes"])
+AC_DEFINE([ENABLE_DEV_PTHREADS],
+          [test "x$enable_device_pthreads" = "xyes"],
+          [PTHREADS device support])
 
 # Unit testing
 PKG_CHECK_MODULES(CHECK, [check >= 0.9.4],
