@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <errno.h>
+#include <unistd.h>
 
 #include "config.h"
 #include "benchmark.h"
@@ -23,7 +24,24 @@ static const size_t max_output = 3;
 #include <time.h>
 #endif
 
+#if defined(HAVE_E_HAL_H)
+#include <e-hal.h>
+#endif
+
 typedef uint64_t platform_clock_t;
+
+/* Arrays */
+#define MAX_OUTPUTS 1 /* Points to same memory */
+#define MAX_INPUTS 3
+#define MAX_PARAMS (MAX_OUTPUTS + MAX_INPUTS)
+
+/* Output args point to same mem, input args point to same mem */
+#ifdef __epiphany__
+#define MAX_ELEMS 512
+uint8_t RAW_MEM[MAX_PARAMS * MAX_ELEMS * sizeof(uintmax_t)];
+#else
+#define MAX_ELEMS 655360
+#endif
 
 #if defined(HAVE_CLOCK_GETTIME)
 static platform_clock_t platform_clock(void)
@@ -36,9 +54,7 @@ static platform_clock_t platform_clock(void)
 
     return nanosec;
 }
-#endif
-
-#if defined(HAVE_MACH_TIME)
+#elif defined(HAVE_MACH_TIME)
 #include <mach/mach_time.h>
 static platform_clock_t platform_clock(void)
 {
@@ -57,6 +73,29 @@ static platform_clock_t platform_clock(void)
     nanosec *= tb_info.numer;
 
     return nanosec;
+}
+#elif defined(HAVE_E_HAL_H)
+/* Return value in ticks */
+/* HACK: This assumes we only call this function twice per bench */
+static platform_clock_t platform_clock(void)
+{
+    static bool initialized = false;
+    uint32_t now;
+
+    if (!initialized) {
+        e_ctimer_stop(E_CTIMER_0);
+        e_ctimer_set(E_CTIMER_0, E_CTIMER_MAX);
+        e_ctimer_start(E_CTIMER_0, E_CTIMER_CLK);
+        initialized = true;
+        return 0;
+    }
+
+    now = E_CTIMER_MAX - e_ctimer_get(E_CTIMER_0, E_CTIMER_MAX);
+    e_ctimer_stop(E_CTIMER_0);
+    e_ctimer_set(E_CTIMER_0, E_CTIMER_MAX);
+    e_ctimer_start(E_CTIMER_0, E_CTIMER_CLK);
+
+    return now;
 }
 #endif
 
@@ -78,16 +117,16 @@ static void item_done(struct item_data *, const struct p_bench_specification *,
                       const char *);
 static void setup_memory(struct p_bench_raw_memory *, char **raw, size_t);
 
+#ifndef __epiphany__
 static char dummy_memarea[1024 * 1024 * 32];
 // int p_bench_dummy_func(char *, size_t);
+#endif
 
 int main(void)
 {
-    static const size_t default_initial_size = 655360;
-
     struct p_bench_specification spec;
     char *raw_mem = NULL;
-    spec.current_size = default_initial_size;
+    spec.current_size = MAX_ELEMS;
 
     setup_memory(&spec.mem, &raw_mem, spec.current_size);
     printf(";name, size, duration (ns)\n");
@@ -140,6 +179,8 @@ static void setup_input_pointers(struct p_bench_raw_memory *mem, char *p,
 
     /* Assume uint64_t is largest type */
 
+    /* TODO: All pointers point to same memory region so output will be bogus */
+
     setup_prandom_chars(p, size * sizeof(uint64_t), seed, false);
     mem->i1_w.p_void = p;
     p += size * sizeof(uint64_t);
@@ -152,9 +193,12 @@ static void setup_input_pointers(struct p_bench_raw_memory *mem, char *p,
     mem->i3_w.p_void = p;
     p += size * sizeof(uint64_t);
 
+#if 0
+    /* TODO: Do we really need 4 inputs? */
     setup_prandom_chars(p, size * sizeof(uint64_t), seed, false);
     mem->i4_w.p_void = p;
     p += size * sizeof(uint64_t);
+#endif
 }
 
 static void setup_memory(struct p_bench_raw_memory *mem, char **raw,
@@ -164,11 +208,14 @@ static void setup_memory(struct p_bench_raw_memory *mem, char **raw,
     assert(size > 0);
     assert(raw != NULL);
 
-    size_t raw_output_size = sizeof(uintmax_t) * size * max_output;
+    /* Overlapping output and input bufs */
+    size_t raw_output_size = MAX_OUTPUTS * MAX_ELEMS * sizeof(uintmax_t);
     size_t raw_size =
-        raw_output_size +
-        (sizeof(float) + sizeof(double) + sizeof(uintmax_t)) * size * 2;
+        raw_output_size + MAX_INPUTS * MAX_ELEMS * (sizeof(uintmax_t));
 
+#ifdef __epiphany__
+    raw = RAW_MEM;
+#else
     if (*raw == NULL) {
         *raw = malloc(raw_size);
     } else {
@@ -178,6 +225,7 @@ static void setup_memory(struct p_bench_raw_memory *mem, char **raw,
         (void)fprintf(stderr, "Unable to allocate memory: %zu\n", size);
         exit(EXIT_FAILURE);
     }
+#endif
 
     setup_output_pointers(mem, *raw);
     setup_input_pointers(mem, *raw + raw_output_size, size);
@@ -185,8 +233,10 @@ static void setup_memory(struct p_bench_raw_memory *mem, char **raw,
 
 static void invalidate_data_cache(void)
 {
+#ifndef __epiphany__
     setup_prandom_chars(dummy_memarea, sizeof(dummy_memarea), 1, false);
     // (void)p_bench_dummy_func(dummy_memarea, sizeof(dummy_memarea));
+#endif
 }
 
 static void item_preface(struct item_data *data,
