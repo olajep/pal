@@ -55,6 +55,9 @@ AC_CHECK_HEADERS([fcntl.h fenv.h float.h inttypes.h limits.h stddef.h stdint.h s
 AC_CHECK_HEADER([mach/mach_time.h],
   [AC_DEFINE([HAVE_MACH_TIME], [1],
     [Define to 1 if you have <mach/mach_time.h>])])
+AC_CHECK_HEADER([e-hal.h],
+  [AC_DEFINE([HAVE_E_HAL_H], [1],
+    [Define to 1 if you have <e-hal.h>])])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_CHECK_HEADER_STDBOOL
